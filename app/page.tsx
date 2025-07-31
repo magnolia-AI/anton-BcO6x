@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { MessageWall } from '@/components/message-wall'
 import { useToast } from "@/hooks/use-toast"
 
 export default function Home() {
@@ -78,6 +79,9 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Message Wall Section */}
+      <MessageWall />
+
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-16">
         <div className="bg-gradient-to-r from-primary to-secondary rounded-xl p-8 md:p-12 text-center">
@@ -100,3 +104,5 @@ export default function Home() {
     </div>
   )
 }
+
+
