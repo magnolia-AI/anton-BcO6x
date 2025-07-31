@@ -154,7 +154,7 @@ export function MessageWall() {
                         <div className="flex justify-between items-start">
                           <h3 className="font-semibold">{msg.name}</h3>
                           <span className="text-xs text-muted-foreground">
-                            {msg.createdAt.toLocaleDateString()}
+                            {new Date(msg.createdAt).toLocaleDateString()}
                           </span>
                         </div>
                         <p className="mt-2 text-sm">{msg.message}</p>
@@ -174,6 +174,7 @@ export function MessageWall() {
     </section>
   )
 }
+
 
 
 
