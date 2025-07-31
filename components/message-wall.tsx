@@ -7,26 +7,29 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
-import { Message, NewMessage } from '@/lib/schema'
-import db from '@/lib/db'
-import { desc } from 'drizzle-orm'
-import { messages } from '@/lib/schema'
 
-interface MessageWithId extends Message {
+interface Message {
   id: number;
+  name: string;
+  message: string;
+  createdAt: string;
 }
 
 export function MessageWall() {
   const [name, setName] = useState('')
   const [messageText, setMessageText] = useState('')
-  const [messagesList, setMessagesList] = useState<MessageWithId[]>([])
+  const [messagesList, setMessagesList] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
   const fetchMessages = useCallback(async () => {
     try {
-      const fetchedMessages = await db.select().from(messages).orderBy(desc(messages.createdAt))
-      setMessagesList(fetchedMessages as MessageWithId[])
+      const response = await fetch('/api/messages')
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages')
+      }
+      const fetchedMessages = await response.json()
+      setMessagesList(fetchedMessages)
     } catch (error) {
       console.error('Failed to fetch messages:', error)
       toast({
@@ -57,16 +60,27 @@ export function MessageWall() {
     }
 
     try {
-      // Insert new message into database
-      const newMessage: NewMessage = {
-        name: name.trim(),
-        message: messageText.trim(),
+      // Send new message to API
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          message: messageText.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to add message')
       }
 
-      const result = await db.insert(messages).values(newMessage).returning()
+      const newMessage = await response.json()
       
       // Add new message to the top of the list
-      setMessagesList(prev => [result[0] as MessageWithId, ...prev])
+      setMessagesList(prev => [newMessage, ...prev])
       
       // Reset form
       setName('')
@@ -174,6 +188,7 @@ export function MessageWall() {
     </section>
   )
 }
+
 
 
 
