@@ -1,51 +1,53 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
+import { Message, NewMessage } from '@/lib/schema'
+import db from '@/lib/db'
+import { desc } from 'drizzle-orm'
+import { messages } from '@/lib/schema'
 
-interface Message {
-  id: string
-  name: string
-  message: string
-  timestamp: Date
+interface MessageWithId extends Message {
+  id: number;
 }
 
 export function MessageWall() {
   const [name, setName] = useState('')
-  const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messageText, setMessageText] = useState('')
+  const [messagesList, setMessagesList] = useState<MessageWithId[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  // Load messages from localStorage on component mount
-  useEffect(() => {
-    const savedMessages = localStorage.getItem('messageWallMessages')
-    if (savedMessages) {
-      try {
-        const parsedMessages = JSON.parse(savedMessages).map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-        setMessages(parsedMessages)
-      } catch (e) {
-        console.error('Failed to parse messages from localStorage', e)
-      }
+  const fetchMessages = useCallback(async () => {
+    try {
+      const fetchedMessages = await db.select().from(messages).orderBy(desc(messages.createdAt))
+      setMessagesList(fetchedMessages as MessageWithId[])
+    } catch (error) {
+      console.error('Failed to fetch messages:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load messages.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
     }
-  }, [])
+  }, [toast])
 
-  // Save messages to localStorage whenever messages change
+  // Load messages from database on component mount
   useEffect(() => {
-    localStorage.setItem('messageWallMessages', JSON.stringify(messages))
-  }, [messages])
+    fetchMessages()
+  }, [fetchMessages])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!name.trim() || !message.trim()) {
+    if (!name.trim() || !messageText.trim()) {
       toast({
         title: "Validation Error",
         description: "Please enter both your name and a message.",
@@ -54,23 +56,34 @@ export function MessageWall() {
       return
     }
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      name: name.trim(),
-      message: message.trim(),
-      timestamp: new Date()
-    }
+    try {
+      // Insert new message into database
+      const newMessage: NewMessage = {
+        name: name.trim(),
+        message: messageText.trim(),
+      }
 
-    setMessages(prev => [newMessage, ...prev])
-    
-    // Reset form
-    setName('')
-    setMessage('')
-    
-    toast({
-      title: "Message Added",
-      description: "Your message has been added to the wall!"
-    })
+      const result = await db.insert(messages).values(newMessage).returning()
+      
+      // Add new message to the top of the list
+      setMessagesList(prev => [result[0] as MessageWithId, ...prev])
+      
+      // Reset form
+      setName('')
+      setMessageText('')
+      
+      toast({
+        title: "Message Added",
+        description: "Your message has been added to the wall!"
+      })
+    } catch (error) {
+      console.error('Failed to add message:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add your message. Please try again.",
+        variant: "destructive"
+      })
+    }
   }
 
   return (
@@ -109,14 +122,14 @@ export function MessageWall() {
                   </label>
                   <Textarea
                     id="message"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
                     placeholder="Leave your message here..."
                     rows={4}
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  Post Message
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Posting..." : "Post Message"}
                 </Button>
               </form>
             </CardContent>
@@ -129,15 +142,19 @@ export function MessageWall() {
               <CardDescription>See what others have shared</CardDescription>
             </CardHeader>
             <CardContent>
-              {messages.length > 0 ? (
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Loading messages...</p>
+                </div>
+              ) : messagesList.length > 0 ? (
                 <ScrollArea className="h-[300px] pr-4">
                   <div className="space-y-4">
-                    {messages.map((msg) => (
+                    {messagesList.map((msg) => (
                       <div key={msg.id} className="p-4 border rounded-lg">
                         <div className="flex justify-between items-start">
                           <h3 className="font-semibold">{msg.name}</h3>
                           <span className="text-xs text-muted-foreground">
-                            {msg.timestamp.toLocaleDateString()}
+                            {msg.createdAt.toLocaleDateString()}
                           </span>
                         </div>
                         <p className="mt-2 text-sm">{msg.message}</p>
@@ -157,3 +174,7 @@ export function MessageWall() {
     </section>
   )
 }
+
+
+
+
